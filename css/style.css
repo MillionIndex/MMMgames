@@ -33,4 +33,6 @@ body {
   background: #2d2d2d;
   border: 2px solid #555;
   display: block;
+  max-width: 100%;
+  height: auto;
 }
