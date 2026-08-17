@@ -33,7 +33,8 @@ function summon(type) {
     x: playerTower.x + 60,
     y: 180,
     currentHp: data.hp,
-    side: "player"
+    side: "player",
+    attackCooldown: 0
   });
 }
 
@@ -48,30 +49,82 @@ function spawnEnemy() {
     x: enemyTower.x - 60,
     y: 180,
     currentHp: data.hp,
-    speed: -data.speed, // 左に進む
+    speed: -data.speed,
     color: "#9c27b0",
-    side: "enemy"
+    side: "enemy",
+    attackCooldown: 0
   });
 }
 
-// 敵を2.5秒ごとに出す
 setInterval(spawnEnemy, 2500);
+
+// 距離計算
+function getDistance(a, b) {
+  return Math.abs(a.x - b.x);
+}
+
+// 戦闘処理
+function handleCombat() {
+  // 自軍 vs 敵
+  playerUnits.forEach(p => {
+    enemyUnits.forEach(e => {
+      if (getDistance(p, e) < p.range + 20) {
+        // 攻撃クールダウン
+        if (p.attackCooldown <= 0) {
+          e.currentHp -= p.attack;
+          p.attackCooldown = 60; // 約1秒に1回（60フレーム想定）
+        }
+        if (e.attackCooldown <= 0) {
+          p.currentHp -= e.attack;
+          e.attackCooldown = 60;
+        }
+      }
+    });
+  });
+
+  // クールダウン減少
+  playerUnits.forEach(u => { if (u.attackCooldown > 0) u.attackCooldown--; });
+  enemyUnits.forEach(u => { if (u.attackCooldown > 0) u.attackCooldown--; });
+
+  // タワーへの攻撃
+  playerUnits.forEach(p => {
+    if (p.x + 30 >= enemyTower.x) {
+      enemyTower.hp -= p.attack * 0.05; // 連続ダメージを抑える
+      if (enemyTower.hp < 0) enemyTower.hp = 0;
+    }
+  });
+
+  enemyUnits.forEach(e => {
+    if (e.x <= playerTower.x + playerTower.width) {
+      playerTower.hp -= e.attack * 0.05;
+      if (playerTower.hp < 0) playerTower.hp = 0;
+    }
+  });
+}
 
 // 更新
 function update() {
-  // 自軍移動
+  // 移動
   playerUnits.forEach(unit => {
-    unit.x += unit.speed;
+    // 近くに敵がいるときは少し止まる（簡易）
+    const nearEnemy = enemyUnits.some(e => getDistance(unit, e) < unit.range);
+    if (!nearEnemy) {
+      unit.x += unit.speed;
+    }
   });
 
-  // 敵移動
   enemyUnits.forEach(unit => {
-    unit.x += unit.speed;
+    const nearPlayer = playerUnits.some(p => getDistance(unit, p) < unit.range);
+    if (!nearPlayer) {
+      unit.x += unit.speed;
+    }
   });
 
-  // 画面外・HP0のユニットを削除
-  playerUnits = playerUnits.filter(u => u.x < canvas.width + 50 && u.currentHp > 0);
-  enemyUnits = enemyUnits.filter(u => u.x > -50 && u.currentHp > 0);
+  handleCombat();
+
+  // 死亡・画面外削除
+  playerUnits = playerUnits.filter(u => u.currentHp > 0 && u.x < canvas.width + 50);
+  enemyUnits = enemyUnits.filter(u => u.currentHp > 0 && u.x > -50);
 }
 
 // 描画
@@ -82,20 +135,20 @@ function draw() {
   ctx.fillStyle = "#4caf50";
   ctx.fillRect(playerTower.x, playerTower.y, playerTower.width, playerTower.height);
   ctx.fillStyle = "#fff";
-  ctx.fillText(playerTower.hp, playerTower.x, playerTower.y - 8);
+  ctx.fillText(Math.floor(playerTower.hp), playerTower.x, playerTower.y - 8);
 
   // 敵タワー
   ctx.fillStyle = "#f44336";
   ctx.fillRect(enemyTower.x, enemyTower.y, enemyTower.width, enemyTower.height);
   ctx.fillStyle = "#fff";
-  ctx.fillText(enemyTower.hp, enemyTower.x, enemyTower.y - 8);
+  ctx.fillText(Math.floor(enemyTower.hp), enemyTower.x, enemyTower.y - 8);
 
   // 自軍
   playerUnits.forEach(unit => {
     ctx.fillStyle = unit.color;
     ctx.fillRect(unit.x, unit.y, 30, 40);
     ctx.fillStyle = "#fff";
-    ctx.fillText(unit.currentHp, unit.x, unit.y - 5);
+    ctx.fillText(Math.floor(unit.currentHp), unit.x, unit.y - 5);
   });
 
   // 敵
@@ -103,8 +156,20 @@ function draw() {
     ctx.fillStyle = unit.color;
     ctx.fillRect(unit.x, unit.y, 30, 40);
     ctx.fillStyle = "#fff";
-    ctx.fillText(unit.currentHp, unit.x, unit.y - 5);
+    ctx.fillText(Math.floor(unit.currentHp), unit.x, unit.y - 5);
   });
+
+  // 勝敗表示（仮）
+  if (playerTower.hp <= 0) {
+    ctx.fillStyle = "red";
+    ctx.font = "40px sans-serif";
+    ctx.fillText("敗北...", 320, 200);
+  }
+  if (enemyTower.hp <= 0) {
+    ctx.fillStyle = "lime";
+    ctx.font = "40px sans-serif";
+    ctx.fillText("勝利！", 320, 200);
+  }
 }
 
 // ゲームループ
