@@ -9,7 +9,6 @@ const summonArcherBtn = document.getElementById("summon-archer");
 let points = 100;
 let playerUnits = [];
 let enemyUnits = [];
-let enemySpawnTimer = 0;
 
 // タワー
 const playerTower = { x: 50, y: 150, width: 40, height: 100, hp: 500 };
@@ -43,7 +42,6 @@ summonArcherBtn.addEventListener("click", () => summon("archer"));
 
 // 敵生成
 function spawnEnemy() {
-  // 仮で剣使いと同じ性能の敵を出す
   const data = CHARACTERS.sword;
   enemyUnits.push({
     ...data,
@@ -56,8 +54,11 @@ function spawnEnemy() {
   });
 }
 
+// 敵を2.5秒ごとに出す
+setInterval(spawnEnemy, 2500);
+
 // 更新
-function update(delta) {
+function update() {
   // 自軍移動
   playerUnits.forEach(unit => {
     unit.x += unit.speed;
@@ -68,14 +69,7 @@ function update(delta) {
     unit.x += unit.speed;
   });
 
-  // 敵出現タイマー
-  enemySpawnTimer += delta;
-  if (enemySpawnTimer > 2500) { // 2.5秒ごと
-    spawnEnemy();
-    enemySpawnTimer = 0;
-  }
-
-  // 画面外削除
+  // 画面外・HP0のユニットを削除
   playerUnits = playerUnits.filter(u => u.x < canvas.width + 50 && u.currentHp > 0);
   enemyUnits = enemyUnits.filter(u => u.x > -50 && u.currentHp > 0);
 }
@@ -114,12 +108,8 @@ function draw() {
 }
 
 // ゲームループ
-let lastTime = 0;
-function gameLoop(timestamp) {
-  const delta = timestamp - lastTime;
-  lastTime = timestamp;
-
-  update(delta);
+function gameLoop() {
+  update();
   draw();
   requestAnimationFrame(gameLoop);
 }
