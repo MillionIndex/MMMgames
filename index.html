@@ -2,26 +2,110 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>にゃんこ風ゲーム</title>
-  <link rel="stylesheet" href="css/style.css">
+  <title>Tower Defense Prototype</title>
+  <style>
+    canvas { border: 2px solid #333; background: #f0f0f0; display: block; margin: 10px auto; }
+    .controls { text-align: center; }
+    button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
+  </style>
 </head>
 <body>
-  <div id="game-container">
-    <!-- ポイント表示 -->
-    <div id="ui">
-      <div>ポイント: <span id="points">0</span></div>
-      <div>
-        <button id="summon-sword">剣使い召喚</button>
-        <button id="summon-archer">弓使い召喚</button>
-      </div>
-    </div>
 
-    <!-- ゲーム画面 -->
-    <canvas id="gameCanvas" width="800" height="400"></canvas>
-  </div>
+<canvas id="gameCanvas" width="800" height="300"></canvas>
+<div class="controls">
+  <span id="moneyDisplay">所持金: 0円</span>
+  <button onclick="spawnPlayer()">味方出撃 (100円)</button>
+</div>
 
-  <script src="js/data/characters.js"></script>
-  <script src="js/main.js"></script>
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let money = 0;
+const playerBase = { x: 50, hp: 1000 };
+const enemyBase = { x: 750, hp: 1000 };
+let players = [];
+let enemies = [];
+
+// 定期的に敵を生成
+setInterval(() => {
+  enemies.push({ x: enemyBase.x - 20, hp: 50, atk: 5, speed: 1, range: 20 });
+}, 4000);
+
+// リソースの自動加算
+setInterval(() => {
+  money += 10;
+  document.getElementById('moneyDisplay').innerText = `所持金: ${money}円`;
+}, 200);
+
+function spawnPlayer() {
+  if (money >= 100) {
+    money -= 100;
+    players.push({ x: playerBase.x + 20, hp: 100, atk: 10, speed: 1.5, range: 20 });
+  }
+}
+
+function update() {
+  // 味方の移動と戦闘
+  players.forEach((p, pIndex) => {
+    let target = enemies.find(e => e.x - p.x <= p.range && e.x - p.x > 0);
+    if (target) {
+      target.hp -= p.atk / 60; // 攻撃
+    } else if (enemyBase.x - p.x <= p.range) {
+      enemyBase.hp -= p.atk / 60;
+    } else {
+      p.x += p.speed; // 移動
+    }
+  });
+
+  // 敵の移動と戦闘
+  enemies.forEach((e, eIndex) => {
+    let target = players.find(p => e.x - p.x <= e.range && e.x - p.x > 0);
+    if (target) {
+      target.hp -= e.atk / 60;
+    } else if (e.x - playerBase.x <= e.range) {
+      playerBase.hp -= e.atk / 60;
+    } else {
+      e.x -= e.speed;
+    }
+  });
+
+  // 生存判定
+  players = players.filter(p => p.hp > 0);
+  enemies = enemies.filter(e => e.hp > 0);
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // 地面
+  ctx.beginPath();
+  ctx.moveTo(0, 250); ctx.lineTo(800, 250); ctx.stroke();
+
+  // 拠点描画
+  ctx.fillStyle = 'blue'; ctx.fillRect(playerBase.x - 20, 150, 40, 100);
+  ctx.fillStyle = 'red';  ctx.fillRect(enemyBase.x - 20, 150, 40, 100);
+
+  // 拠点HP表示
+  ctx.fillStyle = 'black'; ctx.font = '14px sans-serif';
+  ctx.fillText(`味方城: ${Math.max(0, Math.ceil(playerBase.hp))}`, playerBase.x - 30, 140);
+  ctx.fillText(`敵城: ${Math.max(0, Math.ceil(enemyBase.hp))}`, enemyBase.x - 30, 140);
+
+  // キャラクター描画
+  ctx.fillStyle = 'green';
+  players.forEach(p => ctx.fillRect(p.x - 10, 220, 20, 30));
+
+  ctx.fillStyle = 'purple';
+  enemies.forEach(e => ctx.fillRect(e.x - 10, 220, 20, 30));
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
 </body>
 </html>
