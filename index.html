@@ -2,29 +2,26 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>Battle Cats Type Game Proto v2</title>
-  <style>
-    /* 全体のレイアウト */
-    body { font-family: 'Helvetica Neue', Arial, sans-serif; background-color: #2c3e50; color: #ecf0f1; text-align: center; margin: 0; padding: 20px; }
-    
-    /* ゲーム画面 */
-    #gameContainer { position: relative; width: 800px; margin: 0 auto; }
-    canvas { border: 4px solid #34495e; border-radius: 8px; background: linear-gradient(to bottom, #87CEEB 0%, #E0F7FA 100%); /* 空のグラデーション */ display: block; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+  <title>Battle Cats Proto - Fixed & Clean</title>
+  
+  <!-- ① 外部データファイルを先に読み込む -->
+  <script src="data/Cha.js"></script>
 
-    /* UIエリア */
-    #uiArea { width: 800px; margin: 15px auto 0; background: #34495e; padding: 15px; border-radius: 8px; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+  <style>
+    body { font-family: sans-serif; background-color: #2c3e50; color: #ecf0f1; text-align: center; margin: 0; padding: 20px; }
+    #gameContainer { position: relative; width: 800px; margin: 0 auto; }
+    canvas { border: 4px solid #34495e; border-radius: 8px; background: linear-gradient(to bottom, #87CEEB, #E0F7FA); display: block; }
+
+    #uiArea { width: 800px; margin: 15px auto 0; background: #34495e; padding: 15px; border-radius: 8px; display: flex; justify-content: space-around; align-items: center; box-sizing: border-box; }
     #moneyDisplay { font-size: 20px; font-weight: bold; color: #f1c40f; }
     .unit-buttons { display: flex; gap: 10px; }
-    button { padding: 10px 15px; font-size: 14px; cursor: pointer; background-color: #e67e22; color: white; border: none; border-radius: 4px; transition: background 0.2s; }
-    button:hover { background-color: #d35400; }
+    button { padding: 10px 15px; font-size: 14px; cursor: pointer; background-color: #e67e22; color: white; border: none; border-radius: 4px; }
     button:disabled { background-color: #95a5a6; cursor: not-allowed; }
 
-    /* 勝利・敗北のオーバーレイ */
-    #overlay { display: none; position: absolute; top: 0; left: 0; width: 800px; height: 300px; background: rgba(0,0,0,0.7); border-radius: 8px; justify-content: center; align-items: center; z-items: 10; flex-direction: column; }
-    #overlay h1 { font-size: 64px; margin: 0; text-transform: uppercase; letter-spacing: 5px; }
-    .win #overlay h1 { color: #2ecc71; text-shadow: 0 0 20px #2ecc71; }
-    .lose #overlay h1 { color: #e74c3c; text-shadow: 0 0 20px #e74c3c; }
-    #overlay button { margin-top: 20px; font-size: 18px; padding: 10px 30px; }
+    #overlay { display: none; position: absolute; top: 0; left: 0; width: 800px; height: 300px; background: rgba(0,0,0,0.7); border-radius: 8px; justify-content: center; align-items: center; flex-direction: column; }
+    #overlay h1 { font-size: 64px; margin: 0; }
+    .win #overlay h1 { color: #2ecc71; }
+    .lose #overlay h1 { color: #e74c3c; }
   </style>
 </head>
 <body>
@@ -32,7 +29,7 @@
 <div id="gameContainer">
   <canvas id="gameCanvas" width="800" height="300"></canvas>
   <div id="overlay">
-    <h1></h1>
+    <h1 id="resultText"></h1>
     <button onclick="resetGame()">リトライ</button>
   </div>
 </div>
@@ -40,50 +37,24 @@
 <div id="uiArea">
   <span id="moneyDisplay">所持金: 0円</span>
   <div class="unit-buttons">
-    <button id="btnUnit1" onclick="spawnPlayer(0)">味方1 (100円)</button>
-    <button id="btnUnit2" onclick="spawnPlayer(1)">味方2 (250円)</button>
-    <button id="btnUnit3" onclick="spawnPlayer(2)">味方3 (500円)</button>
+    <button id="btn0" onclick="spawnPlayer(0)">味方1 (100円)</button>
+    <button id="btn1" onclick="spawnPlayer(1)">味方2 (250円)</button>
+    <button id="btn2" onclick="spawnPlayer(2)">味方3 (500円)</button>
   </div>
 </div>
 
 <script>
-// --- ゲームデータ・設定 ---
-
-// 将来の「ガチャ」で引いたキャラクターのリストを想定
-// ガチャを実装したら、このリストを配列として管理し、UIにボタンを追加していく
-const playerUnitDb = [
-  { id: 0, name: "わんこ", cost: 100, hp: 100, atk: 10, speed: 1.5, range: 20, color: '#2ecc71' }, // 緑
-  { id: 1, name: "くま",   cost: 250, hp: 250, atk: 25, speed: 1.0, range: 25, color: '#3498db' }, // 青
-  { id: 2, name: "ぞう",   cost: 500, hp: 600, atk: 50, speed: 0.7, range: 35, color: '#9b59b6' }  // 紫
-];
-
-// 敵キャラクター
-const enemyUnitDb = {
-  basic: { hp: 50, atk: 5, speed: 1.0, range: 20, color: '#e74c3c' },
-  strong: { hp: 300, atk: 20, speed: 0.8, range: 25, color: '#c0392b' }
-};
-
-// --- ゲーム状態管理 ---
-
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 const overlay = document.getElementById('overlay');
-const resultText = overlay.querySelector('h1');
+const resultText = document.getElementById('resultText');
 const moneyDisplay = document.getElementById('moneyDisplay');
-const unitButtons = [
-  document.getElementById('btnUnit1'),
-  document.getElementById('btnUnit2'),
-  document.getElementById('btnUnit3')
-];
 
-let state = 'playing'; // playing, win, lose
+let state = 'playing';
 let money = 0;
 const MAX_MONEY = 1000;
 let playerBase, enemyBase, players, enemies;
-let playerUnitsToSpawn = [];
 let spawnInterval;
-
-// --- 初期化とリセット ---
 
 function initGame() {
   state = 'playing';
@@ -95,56 +66,42 @@ function initGame() {
   overlay.style.display = 'none';
   document.getElementById('gameContainer').className = '';
   
-  // 敵の自動生成タイマー
   clearInterval(spawnInterval);
   spawnInterval = setInterval(() => {
     if (state !== 'playing') return;
-    // 30%の確率で強い敵
-    if (Math.random() < 0.3) {
-      spawnEnemy('strong');
-    } else {
-      spawnEnemy('basic');
-    }
-  }, 4500);
+    spawnEnemy(Math.random() < 0.3 ? 'strong' : 'basic');
+  }, 4000);
 }
 
-function resetGame() {
-  initGame();
-}
-
-// --- ゲームロジック ---
-
-// リソースの自動加算 (1秒間に50円)
+// リソース自動加算
 setInterval(() => {
   if (state !== 'playing') return;
-  money = Math.min(MAX_MONEY, money + 5);
+  money = Math.min(MAX_MONEY, money + 10);
   updateUi();
-}, 100);
+}, 200);
 
 function updateUi() {
   moneyDisplay.innerText = `所持金: ${money}円`;
-  
-  // 所持金に応じてボタンの有効/無効を切り替え
-  playerUnitDb.forEach((unit, index) => {
-    if (money >= unit.cost) {
-      unitButtons[index].disabled = false;
-    } else {
-      unitButtons[index].disabled = true;
-    }
+  playerUnitDb.forEach((u, i) => {
+    const btn = document.getElementById(`btn${i}`);
+    if (btn) btn.disabled = (money < u.cost);
   });
 }
 
 function spawnPlayer(unitId) {
   if (state !== 'playing') return;
+  // Cha.js から取得したデータベースを参照
   const unitData = playerUnitDb.find(u => u.id === unitId);
   if (!unitData || money < unitData.cost) return;
 
   money -= unitData.cost;
   updateUi();
 
+  // ディープコピーして独立したインスタンスを作成
   players.push({
-    ...unitData, // データベースからステータスをコピー
-    x: playerBase.x + 20,
+    ...unitData,
+    maxHp: unitData.hp,
+    x: playerBase.x + 20
   });
 }
 
@@ -152,127 +109,120 @@ function spawnEnemy(type) {
   const unitData = enemyUnitDb[type];
   enemies.push({
     ...unitData,
-    x: enemyBase.x - 20,
+    maxHp: unitData.hp,
+    x: enemyBase.x - 20
   });
 }
 
+// --- 高速・軽量化された更新処理 ---
 function update() {
   if (state !== 'playing') return;
 
-  // 味方の移動と戦闘
-  players.forEach((p) => {
-    // 範囲内に敵がいるか？
-    let target = enemies.find(e => e.x - p.x <= p.range && e.x - p.x > 0);
-    if (target) {
-      target.hp -= p.atk / 60; // 攻撃 (1フレームあたりのダメージ)
-    } else if (enemyBase.x - p.x <= p.range) {
-      // 敵城を攻撃
-      enemyBase.hp -= p.atk / 60;
-    } else {
-      p.x += p.speed; // 移動
-    }
-  });
+  const dt = 1 / 60; // 60FPS前提のデルタタイム
 
-  // 敵の移動と戦闘
-  enemies.forEach((e) => {
-    // 範囲内に味方がいるか？
-    let target = players.find(p => e.x - p.x <= e.range && e.x - p.x > 0);
+  // 味方の処理
+  for (let i = players.length - 1; i >= 0; i--) {
+    const p = players[i];
+    
+    // 最前線の敵を探す（配列の先頭に近い敵）
+    let target = null;
+    for (let j = 0; j < enemies.length; j++) {
+      if (enemies[j].x > p.x && enemies[j].x - p.x <= p.range) {
+        target = enemies[j];
+        break; // 最初に見つかった敵（最前線）だけ攻撃してループを抜ける
+      }
+    }
+
     if (target) {
-      target.hp -= e.atk / 60;
+      target.hp -= p.atk * dt; // 爆速ヒット処理
+    } else if (enemyBase.x - p.x <= p.range) {
+      enemyBase.hp -= p.atk * dt;
+    } else {
+      p.x += p.speed;
+    }
+  }
+
+  // 敵の処理
+  for (let i = enemies.length - 1; i >= 0; i--) {
+    const e = enemies[i];
+
+    let target = null;
+    for (let j = 0; j < players.length; j++) {
+      if (players[j].x < e.x && e.x - players[j].x <= e.range) {
+        target = players[j];
+        break;
+      }
+    }
+
+    if (target) {
+      target.hp -= e.atk * dt;
     } else if (e.x - playerBase.x <= e.range) {
-      // 味方城を攻撃
-      playerBase.hp -= e.atk / 60;
+      playerBase.hp -= e.atk * dt;
     } else {
       e.x -= e.speed;
     }
-  });
+  }
 
-  // 生存判定
+  // 体力ゼロのユニットを削除（軽量フィルタリング）
   players = players.filter(p => p.hp > 0);
   enemies = enemies.filter(e => e.hp > 0);
 
-  // 勝利・敗北判定
-  if (enemyBase.hp <= 0) {
-    state = 'win';
-    endGame('勝利');
-  } else if (playerBase.hp <= 0) {
-    state = 'lose';
-    endGame('敗北');
-  }
+  // 勝敗判定
+  if (enemyBase.hp <= 0) endGame('win', '勝利');
+  if (playerBase.hp <= 0) endGame('lose', '敗北');
 }
 
-function endGame(message) {
+function endGame(resultClass, message) {
+  state = resultClass;
   resultText.innerText = message;
-  document.getElementById('gameContainer').className = state;
+  document.getElementById('gameContainer').className = resultClass;
   overlay.style.display = 'flex';
 }
 
-// --- 描画ロジック ---
+function resetGame() {
+  initGame();
+}
 
+// 描画処理
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   // 地面
   ctx.beginPath();
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = '#7e5c3e'; // 茶色
+  ctx.strokeStyle = '#7e5c3e'; ctx.lineWidth = 3;
   ctx.moveTo(0, 250); ctx.lineTo(800, 250); ctx.stroke();
-  ctx.lineWidth = 1; // 元に戻す
 
-  // 拠点描画 (ただの四角)
-  ctx.fillStyle = '#34495e'; // 味方城
-  ctx.fillRect(playerBase.x - 20, 150, 40, 100);
-  ctx.fillStyle = '#c0392b'; // 敵城
-  ctx.fillRect(enemyBase.x - 20, 150, 40, 100);
+  // 拠点
+  ctx.fillStyle = '#34495e'; ctx.fillRect(playerBase.x - 20, 150, 40, 100);
+  ctx.fillStyle = '#c0392b'; ctx.fillRect(enemyBase.x - 20, 150, 40, 100);
 
-  // 拠点HP表示
-  ctx.fillStyle = 'black'; ctx.font = 'bold 16px sans-serif';
-  ctx.fillText(`${Math.max(0, Math.ceil(enemyBase.hp))}`, enemyBase.x - 25, 140);
+  // 敵城HP
+  ctx.fillStyle = 'black'; ctx.font = 'bold 14px sans-serif';
+  ctx.fillText(`敵城: ${Math.max(0, Math.ceil(enemyBase.hp))}`, enemyBase.x - 30, 140);
 
-  // キャラクター描画
+  // ユニット描画
   players.forEach(p => {
-    ctx.fillStyle = p.color; // 固有の色
+    ctx.fillStyle = p.color;
     ctx.fillRect(p.x - 10, 220, 20, 30);
   });
 
   enemies.forEach(e => {
-    ctx.fillStyle = e.color; // 敵の色
+    ctx.fillStyle = e.color;
     ctx.fillRect(e.x - 10, 220, 20, 30);
   });
 
-  // --- 自分のHPバー (画面下部、横長いバー) ---
-  const barWidth = 760; // 画面幅にほぼ合わせる
-  const barHeight = 20;
-  const barX = 20;
-  const barY = 270; // 地面の下
-  
-  // 背景 (グレー)
+  // 自分城のHPバー（最下部）
+  const barW = 760, barH = 20, barX = 20, barY = 270;
   ctx.fillStyle = '#7f8c8d';
-  ctx.fillRect(barX, barY, barWidth, barHeight);
-  
-  // 現在のHP (緑から赤へグラデーション)
+  ctx.fillRect(barX, barY, barW, barH);
+
   const hpRatio = Math.max(0, playerBase.hp / playerBase.maxHp);
-  const currentBarWidth = barWidth * hpRatio;
-  
-  const hpGradient = ctx.createLinearGradient(barX, barY, barX + barWidth, barY);
-  hpGradient.addColorStop(0, '#e74c3c'); // 0%: 赤
-  hpGradient.addColorStop(0.5, '#f1c40f'); // 50%: 黄
-  hpGradient.addColorStop(1, '#2ecc71'); // 100%: 緑
-  
-  ctx.fillStyle = hpGradient;
-  ctx.fillRect(barX, barY, currentBarWidth, barHeight);
+  ctx.fillStyle = hpRatio > 0.5 ? '#2ecc71' : (hpRatio > 0.2 ? '#f1c40f' : '#e74c3c');
+  ctx.fillRect(barX, barY, barW * hpRatio, barH);
 
-  // バーの枠線
-  ctx.strokeStyle = '#34495e';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(barX, barY, barWidth, barHeight);
-
-  // HPテキスト
-  ctx.fillStyle = 'white';
-  ctx.font = 'bold 14px sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(`自分の城 HP: ${Math.max(0, Math.ceil(playerBase.hp))} / ${playerBase.maxHp}`, canvas.width / 2, barY + 15);
-  ctx.textAlign = 'start'; // 元に戻す
+  ctx.fillStyle = 'white'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText(`自城 HP: ${Math.max(0, Math.ceil(playerBase.hp))} / ${playerBase.maxHp}`, 400, barY + 14);
+  ctx.textAlign = 'start';
 }
 
 function loop() {
