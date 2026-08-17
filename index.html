@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>にゃんこ風ゲーム</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="game-container">
+    <!-- ポイント表示 -->
+    <div id="ui">
+      <div>ポイント: <span id="points">0</span></div>
+      <div>
+        <button id="summon-sword">剣使い召喚</button>
+        <button id="summon-archer">弓使い召喚</button>
+      </div>
+    </div>
+
+    <!-- ゲーム画面 -->
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+  </div>
+
+  <script src="js/data/characters.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>
