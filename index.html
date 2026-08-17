@@ -2,23 +2,18 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
-  <title>Battle Cats Proto - Fixed & Clean</title>
-  
-  <!-- ① 外部データファイルを先に読み込む -->
+  <title>Battle Cats - Ultra Fast Edition</title>
   <script src="data/Cha.js"></script>
-
   <style>
     body { font-family: sans-serif; background-color: #2c3e50; color: #ecf0f1; text-align: center; margin: 0; padding: 20px; }
     #gameContainer { position: relative; width: 800px; margin: 0 auto; }
     canvas { border: 4px solid #34495e; border-radius: 8px; background: linear-gradient(to bottom, #87CEEB, #E0F7FA); display: block; }
-
     #uiArea { width: 800px; margin: 15px auto 0; background: #34495e; padding: 15px; border-radius: 8px; display: flex; justify-content: space-around; align-items: center; box-sizing: border-box; }
     #moneyDisplay { font-size: 20px; font-weight: bold; color: #f1c40f; }
     .unit-buttons { display: flex; gap: 10px; }
     button { padding: 10px 15px; font-size: 14px; cursor: pointer; background-color: #e67e22; color: white; border: none; border-radius: 4px; }
     button:disabled { background-color: #95a5a6; cursor: not-allowed; }
-
-    #overlay { display: none; position: absolute; top: 0; left: 0; width: 800px; height: 300px; background: rgba(0,0,0,0.7); border-radius: 8px; justify-content: center; align-items: center; flex-direction: column; }
+    #overlay { display: none; position: absolute; top: 0; left: 0; width: 800px; height: 300px; background: rgba(0,0,0,0.8); border-radius: 8px; justify-content: center; align-items: center; flex-direction: column; }
     #overlay h1 { font-size: 64px; margin: 0; }
     .win #overlay h1 { color: #2ecc71; }
     .lose #overlay h1 { color: #e74c3c; }
@@ -70,15 +65,15 @@ function initGame() {
   spawnInterval = setInterval(() => {
     if (state !== 'playing') return;
     spawnEnemy(Math.random() < 0.3 ? 'strong' : 'basic');
-  }, 4000);
+  }, 3500);
 }
 
-// リソース自動加算
+// リソース自動加算 (視覚フィードバック向上のため高速更新)
 setInterval(() => {
   if (state !== 'playing') return;
   money = Math.min(MAX_MONEY, money + 10);
   updateUi();
-}, 200);
+}, 100);
 
 function updateUi() {
   moneyDisplay.innerText = `所持金: ${money}円`;
@@ -90,18 +85,18 @@ function updateUi() {
 
 function spawnPlayer(unitId) {
   if (state !== 'playing') return;
-  // Cha.js から取得したデータベースを参照
   const unitData = playerUnitDb.find(u => u.id === unitId);
   if (!unitData || money < unitData.cost) return;
 
   money -= unitData.cost;
   updateUi();
 
-  // ディープコピーして独立したインスタンスを作成
   players.push({
     ...unitData,
     maxHp: unitData.hp,
-    x: playerBase.x + 20
+    x: playerBase.x + 20,
+    atkCooldown: 0,
+    hitTimer: 0
   });
 }
 
@@ -110,64 +105,69 @@ function spawnEnemy(type) {
   enemies.push({
     ...unitData,
     maxHp: unitData.hp,
-    x: enemyBase.x - 20
+    x: enemyBase.x - 20,
+    atkCooldown: 0,
+    hitTimer: 0
   });
 }
 
-// --- 高速・軽量化された更新処理 ---
 function update() {
   if (state !== 'playing') return;
 
-  const dt = 1 / 60; // 60FPS前提のデルタタイム
-
-  // 味方の処理
-  for (let i = players.length - 1; i >= 0; i--) {
+  // 味方の更新ロジック
+  for (let i = 0; i < players.length; i++) {
     const p = players[i];
-    
-    // 最前線の敵を探す（配列の先頭に近い敵）
-    let target = null;
-    for (let j = 0; j < enemies.length; j++) {
-      if (enemies[j].x > p.x && enemies[j].x - p.x <= p.range) {
-        target = enemies[j];
-        break; // 最初に見つかった敵（最前線）だけ攻撃してループを抜ける
-      }
-    }
+    if (p.atkCooldown > 0) p.atkCooldown--;
+    if (p.hitTimer > 0) p.hitTimer--;
+
+    // 最前線の敵を検索
+    let target = enemies.find(e => e.x > p.x && e.x - p.x <= p.range);
 
     if (target) {
-      target.hp -= p.atk * dt; // 爆速ヒット処理
+      if (p.atkCooldown === 0) {
+        // 攻撃の瞬間：即座にダメージを算出しクールダウンをセット
+        target.hp -= p.atk;
+        target.hitTimer = 5; // ヒット時のフラッシュ演出 (5フレーム)
+        p.atkCooldown = p.atkInterval;
+      }
     } else if (enemyBase.x - p.x <= p.range) {
-      enemyBase.hp -= p.atk * dt;
+      if (p.atkCooldown === 0) {
+        enemyBase.hp -= p.atk;
+        p.atkCooldown = p.atkInterval;
+      }
     } else {
       p.x += p.speed;
     }
   }
 
-  // 敵の処理
-  for (let i = enemies.length - 1; i >= 0; i--) {
+  // 敵の更新ロジック
+  for (let i = 0; i < enemies.length; i++) {
     const e = enemies[i];
+    if (e.atkCooldown > 0) e.atkCooldown--;
+    if (e.hitTimer > 0) e.hitTimer--;
 
-    let target = null;
-    for (let j = 0; j < players.length; j++) {
-      if (players[j].x < e.x && e.x - players[j].x <= e.range) {
-        target = players[j];
-        break;
-      }
-    }
+    let target = players.find(p => p.x < e.x && e.x - p.x <= e.range);
 
     if (target) {
-      target.hp -= e.atk * dt;
+      if (e.atkCooldown === 0) {
+        target.hp -= e.atk;
+        target.hitTimer = 5;
+        e.atkCooldown = e.atkInterval;
+      }
     } else if (e.x - playerBase.x <= e.range) {
-      playerBase.hp -= e.atk * dt;
+      if (e.atkCooldown === 0) {
+        playerBase.hp -= e.atk;
+        e.atkCooldown = e.atkInterval;
+      }
     } else {
       e.x -= e.speed;
     }
   }
 
-  // 体力ゼロのユニットを削除（軽量フィルタリング）
+  // 即時消滅：HPが0以下の要素をそのフレームで完全排除
   players = players.filter(p => p.hp > 0);
   enemies = enemies.filter(e => e.hp > 0);
 
-  // 勝敗判定
   if (enemyBase.hp <= 0) endGame('win', '勝利');
   if (playerBase.hp <= 0) endGame('lose', '敗北');
 }
@@ -183,7 +183,6 @@ function resetGame() {
   initGame();
 }
 
-// 描画処理
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -200,18 +199,18 @@ function draw() {
   ctx.fillStyle = 'black'; ctx.font = 'bold 14px sans-serif';
   ctx.fillText(`敵城: ${Math.max(0, Math.ceil(enemyBase.hp))}`, enemyBase.x - 30, 140);
 
-  // ユニット描画
+  // ユニット描画（被弾時フラッシュ演出で即時認知を強化）
   players.forEach(p => {
-    ctx.fillStyle = p.color;
+    ctx.fillStyle = p.hitTimer > 0 ? '#ffffff' : p.color;
     ctx.fillRect(p.x - 10, 220, 20, 30);
   });
 
   enemies.forEach(e => {
-    ctx.fillStyle = e.color;
+    ctx.fillStyle = e.hitTimer > 0 ? '#ffffff' : e.color;
     ctx.fillRect(e.x - 10, 220, 20, 30);
   });
 
-  // 自分城のHPバー（最下部）
+  // 自城の巨大HPバー
   const barW = 760, barH = 20, barX = 20, barY = 270;
   ctx.fillStyle = '#7f8c8d';
   ctx.fillRect(barX, barY, barW, barH);
